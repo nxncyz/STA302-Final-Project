@@ -1,0 +1,550 @@
+---
+title: "STA302 Final Project"
+author: "Ziyi Zhang"
+date: "15/06/2023"
+output: 
+  
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Sleep health and Lifestyle
+
+## Background
+What can we say about 
+
+# Dataset Overview
+The Sleep Health and Lifestyle Dataset comprises 374 rows and 13 columns, covering a wide range of variables related to sleep and daily habits. It includes details such as gender, age, occupation, sleep duration, quality of sleep, physical activity level, stress levels, BMI category, blood pressure, heart rate, daily steps, and the presence or absence of sleep disorders.
+
+## Key Features of the Dataset
+Comprehensive Sleep Metrics: Explore sleep duration, quality, and factors influencing sleep patterns.
+Lifestyle Factors: Analyze physical activity levels, stress levels, and BMI categories.
+Cardiovascular Health: Examine blood pressure and heart rate measurements.
+Sleep Disorder Analysis: Identify the occurrence of sleep disorders such as Insomnia and Sleep Apnea.
+
+## Dataset Columns
+Person ID: An identifier for each individual.
+Gender: The gender of the person (Male/Female).
+Age: The age of the person in years.
+Occupation: The occupation or profession of the person.
+Sleep Duration (hours): The number of hours the person sleeps per day.
+Quality of Sleep (scale: 1-10): A subjective rating of the quality of sleep, ranging from 1 to 10.
+Physical Activity Level (minutes/day): The number of minutes the person engages in physical activity daily.
+Stress Level (scale: 1-10): A subjective rating of the stress level experienced by the person, ranging from 1 to 10.
+BMI Category: The BMI category of the person (e.g., Underweight, Normal, Overweight).
+Blood Pressure (systolic/diastolic): The blood pressure measurement of the person, indicated as systolic pressure over diastolic pressure.
+Heart Rate (bpm): The resting heart rate of the person in beats per minute.
+Daily Steps: The number of steps the person takes per day.
+Sleep Disorder: The presence or absence of a sleep disorder in the person (None, Insomnia, Sleep Apnea).
+
+## Details about Sleep Disorder Column
+- None: The individual does not exhibit any specific sleep disorder.
+- Insomnia: The individual experiences difficulty falling asleep or staying asleep, leading to inadequate or poor-quality sleep.
+- Sleep Apnea: The individual suffers from pauses in breathing during sleep, resulting in disrupted sleep patterns and potential health risks.
+
+# Exploratory Data Analysis
+
+###Install any packages needed
+```{r}
+install.packages("tidyverse")
+install.packages("table1")
+install.packages("miscset")
+
+library(tidyverse)
+library(table1)
+library(miscset)
+```
+
+### Load the data
+```{r}
+data <- read.csv(file="./Sleep_health_and_lifestyle_dataset.csv", header=T)
+glimpse(data)
+```
+### Summarize the data
+```{r}
+summary(data)
+```
+It summarizes each variable in the data set.
+For each of the numeric variables we can see the following information: 
+  - Min: The minimum value
+  - 1st Qu: The value of the first quartile (25th            percentile)
+  - Median: The median value
+  - Mean: The mean value
+  - 3rd Qu: The value of the third quartile (75th            percentile)
+  - Max: The maximum value
+For the categorical variables in the data set (Gender, Occupation, BMI.Category, Blood.Pressure, Sleep.Disorder) we see a frequency count of each value
+
+### Clean and sort Data
+```{r}
+# change Person.ID from int to chr
+data$Person.ID <- as.character(data$Person.ID)
+
+# separate Blood.Pressure into new columns "Systolic", and "Diastolic"
+data1 <- data %>%
+  separate(Blood.Pressure, c("Systolic", "Diastolic"), "/")
+glimpse(data1)
+```
+```{r} 
+# change Systolic and Diastolic variables from chr to int 
+data1$Systolic <- as.integer(data1$Systolic)
+data1$Diastolic <- as.integer(data1$Diastolic)
+```
+
+### Numerical variables
+```{r}
+# Histogram of Numerical Variables
+data1 %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scale = "free") +
+    geom_histogram(bins=10, color="black", fill="blue")
+```
+A little difficult to see the trends in some of the graphs when set to bins=10. There are many gaps in the graphs with Physical.Activity.Level, Quality.of.Sleep, Stress.Level. Systolic, Diastolic, and Daily.steps seems to have a very unusual pattern that doesn't fit with any distributions.
+
+```{r}
+# box plot to see the median, and check for outliers
+data1 %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scale = "free") +
+    geom_boxplot()
+```
+No apparent outliers in the variables other than some in Heart.Rate.
+
+### Categorical Variables
+```{r, fig.height=10, fig.width=22}
+# bar graph display for all the categorical variables
+ggplotGrid(ncol = 2,
+    lapply(c("Gender", "Occupation", "BMI.Category", "Sleep.Disorder"),
+       function(col) {
+         ggplot(data1, aes_string(col)) +
+           geom_bar(color="black", fill="blue")
+       }))
+```
+Analysis: 
+- Gender (binary-class): Even distribution for female and male
+- Occupation (multi-class): Some occupations do not have enough data plotted on the graph to draw sufficient conclusions. May consider merging those occupations into one group
+- BMI.Category (multi-class): A somewhat balanced distribution for "Normal" and "Overweight", not enough data under "Obese" and "Normal Weight", considering adding it to the "Overweight", and "Normal" category
+- Sleep.Disorder (multi-class): Somewhat even distributions for those with no sleep disorders and those with sleep disorders. For the categories "Sleep Apnea" and "Insomnia" that are under sleep disorder, it seems evenly distributed.
+
+```{r, fig.height=10, fig.width=22}
+# fix Occupation by combining the occupations with low data into either the category "others", or combine with a similar category of same field
+data1$Occupation[data1$Occupation == 'Manager'] <- 'Others'
+data1$Occupation[data1$Occupation == 'Sales Representative'] <- 'Salesperson'
+data1$Occupation[data1$Occupation == 'Scientist'] <- 'Others'
+data1$Occupation[data1$Occupation == 'Software Engineer'] <- 'Engineer'
+
+# fix BMI.Category by adding "Obese" to "Overweight"
+data1$BMI.Category[data1$BMI.Category == 'Obese'] <- 'Overweight'
+
+# combine the two different labels for people in normal BMI category
+data1$BMI.Category[data1$BMI.Category == 'Normal Weight'] <- 'Normal'
+
+# show new bar graph display
+ggplotGrid(ncol = 2,
+    lapply(c("Gender", "Occupation", "BMI.Category", "Sleep.Disorder"),
+       function(col) {
+         ggplot(data1, aes_string(col)) +
+           geom_bar(color="black", fill="blue")
+       }))
+```
+
+### Characteristic summary table
+```{r}
+# Show the characteristics of the surveyed individuals in a table for an overall easy analysis
+caption <- "Table 1: Characteristics of individuals"
+table1(~ Gender + Age + Occupation + Sleep.Duration + Quality.of.Sleep + Physical.Activity.Level + Stress.Level + BMI.Category + Systolic + Diastolic + Heart.Rate + Daily.Steps + Sleep.Disorder, data=data1, caption=caption)
+```
+Looking at the data above, some questions to keep in mind for linear regression:
+1. What is the relationship between sleep quality and sleep duration?
+2. What characteristics affect sleep duration and sleep quality?
+3. Does physical activity affect sleep quality or sleep duration?
+4. Are people with high stress level tend to have worse sleep quality?
+
+```{r} 
+# change BMI.Category to numerical data for regression analysis, "Normal" = 1, "Overweight" = 2
+data1 <- transform(
+  data1,
+  BMI.Category = as.integer(as.factor(BMI.Category))
+)
+data1
+```
+
+
+### Some univariate plots to highlight some problems we might face with a model
+```{r, echo = F, fig.cap = "Plot of Sleep Quality (Y) aganst each of Sleep Duration, Stress level, Physical Activity level, Heart Rate, Systolic, Diastolic and BMI.Category (X)", fig.height=10, fig.width=10}
+# Plotting Sleep Quality against Sleep Duration, Stress level, Physical Activity level, Heart Rate, Systolic, Diastolic and BMI.Category for a better visual
+par(mfrow=c(2,2))
+# Sleep Quality vs Sleep Duration
+plot(data1$Sleep.Duration, data1$Quality.of.Sleep, main = "Sleep Quality against Sleep Duration", xlab = "Sleep Duration", ylab = "Sleep Quality")
+# Sleep Quality vs Stress Level
+plot(data1$Stress.Level, data1$Quality.of.Sleep, main = "Sleep Quality against Stress Level", xlab = "Stress Level", ylab = "Sleep Quality")
+# Sleep Quality vs Physical Activity Level
+plot(data1$Physical.Activity.Level, data1$Quality.of.Sleep, main = "Sleep Quality against Physical Activity Level", xlab = "Physical Activity Level", ylab = "Sleep Quality")
+# Sleep Quality vs Heart Rate
+plot(data1$Heart.Rate, data1$Quality.of.Sleep, main = "Sleep Quality against Heart Rate", xlab = "Heart Rate", ylab = "Sleep Quality")
+# Sleep Quality vs Systolic
+plot(data1$Systolic, data1$Quality.of.Sleep, main = "Sleep Quality against Systolic", xlab = "Systolic", ylab = "Sleep Quality")
+# Sleep Quality vs Diastolic
+plot(data1$Diastolic, data1$Quality.of.Sleep, main = "Sleep Quality against Diastolic", xlab = "Diastolic", ylab = "Sleep Quality")
+# Sleep Quality vs BMI.Category
+plot(data1$BMI.Category, data1$Quality.of.Sleep, main = "Sleep Quality against BMI.Category", xlab = "BMI.Category", ylab = "Sleep Quality")
+```
+## Modelling
+```{r}
+# Select the variables we want to model
+data2 <- data1 %>%
+  select(Person.ID, Quality.of.Sleep, Sleep.Duration, Physical.Activity.Level, Stress.Level, Systolic, Diastolic, Heart.Rate, BMI.Category)
+```
+
+### Preliminary Informal Assessment of Assumptions
+```{r}
+# Preliminary check for linearity - (look at scatter-plots and histograms) and constant variance - (look at scatter-plots)
+data2 %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scale = "free") +
+    geom_histogram(bins=5, color="black", fill="grey")
+
+
+pairs(data2[,2:9])
+```
+Analysis:
+- BMI.Category: Uniformly distributed
+- Diastolic: Somewhat normally distributed
+- Heart.Rate: Skewed to the left (towards lower heart rates), seems a bit exponentially distributed
+- Physical.Activity.Level: Uniformly distributed
+- Quality.of.Sleep: Skewed to the right (towards higher values), somewhat exponentially distributed
+- Sleep.Duration: Uniformly distributed
+- Stress.Level: Seemed uniformly distributed, but skewed up to the right (towards higher values)
+- Systolic: Somewhat normally distributed
+Note: the distribution of Diastolic and Systolic are not identical
+
+```{r echo = F, fig.cap = "Distribution of Sleep Quality of Individuals (n=374)", fig.height=5, fig.width=10}
+# check Normality - look at histogram of response to see symmetric
+data2 %>%
+  ggplot(aes(Quality.of.Sleep)) +
+    geom_histogram(bins=5, color="black", fill="grey")
+```
+Analysis: Skewed to the right (towards higher values), somewhat exponentially distributed
+
+The response is skewed to the right, highlighting the potential to see a Normality violation.The predictors are skewed, highlighting the potential to see maybe linearity problems or just poorly fitting models. We may even have a small indication we might face a problem with non-constant variance. We will continue to fit a model and check the assumptions formally.
+
+### Multiple Linear Model
+```{r}
+# running a multiple linear model
+model_full <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category, data=data2)
+
+# look at the summary
+summary(model_full)
+
+# look at the attributes of the summary to see how to extract R^2
+attributes(summary(model_full))
+summary(model_full)$r.squared
+
+summary(model_full)$adj.r.squared
+AIC(model_full)
+BIC(model_full)
+```
+This equation is estimating the relationship $SleepQuality_{i} = \beta_0 + \beta_1SleepDuration_{i} + \beta_2PhysicalActivityLevel_{i} + \beta_3BMI.Cateogry_{i} + \epsilon_i$ from our sample of 374 surveyed individuals. The coefficients we get are the estimated $\beta$s.
+
+So the model output tells us that a significant linear relationship does exist between the response and at least one of the predictors present. Further, we see that this model explains approximately 78% of the variation originally present in the response Sleep Quality (78% of the total variation can be explained by these predictors in this way while 22% is still unexplained). What if we also wanted a breakdown of the sum of squares for this model?
+
+```{r}
+# use anova() function to decompose the variance
+anova(model_full)
+``` 
+Notice this is not exactly what we expect. The Anova function splits up the regression sum of squares into separate SSs for each predictor. 
+
+```{r}
+# reduce model
+model_1 <- lm(Quality.of.Sleep ~ Sleep.Duration, data=data2)
+
+# run partial F test
+anova(model_1, model_full)
+
+# summary
+summary(model_1)
+summary(model_1)$adj.r.squared
+AIC(model_1)
+BIC(model_1)
+```
+We reject the null which says Physical.Activity.Level and BMI.Category should both be removed
+
+```{r}
+# add Physical.Activity.Level, BMI.Category, Systolic, Diastolic back into model
+model_2 <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Systolic + Diastolic, data=data2)
+
+# run partial F test
+anova(model_2, model_full)
+
+summary(model_2)
+summary(model_2)$adj.r.squared
+AIC(model_2)
+BIC(model_2)
+```
+We notice that the newly added predictors are not significant, so based on the t-test, we could remove it and get a smaller model
+
+```{r}
+# remove Systolic and Diastolic, add Stress.Level and Heart.Rate
+model_3 <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Stress.Level + Heart.Rate, data=data2)
+
+# run partial F test
+anova(model_3, model_full)
+
+summary(model_3)
+summary(model_3)$adj.r.squared
+AIC(model_3)
+BIC(model_3)
+```
+**Notes for a report**
+We fit a linear model for Quality.of.Sleep that included predictors Sleep.Duration, Physical.Activity.Level, BMI.Category ($R^2 = 0.78$). With only the predictor Sleep.Duration being significantly related to the response. So we conducted a partial F test to compare the simple linear model involving Sleep.Duration to the initial model. The test rejected the null that all predictors in the initial model except Sleep.Duration were not necessary ($p-value = 0.827$), thus we don't need to remove Physical.Activity.Level and BMI.Category. So instead, we tested whether Systolic and Diastolic predictors were necessary using a partial F test, and found that they were not ($p-value = 0.1721$). Now we add Stress.Level and Heart.Rate to the next model. The remaining model with Sleep.Duration, Physical.Activity.Level, BMI.Category, Stress.Level, and Heart.Rate had no non-significant predictor. So we ended up with a model involving only 5 predictors with an $R^2 = 0.9004$, indicating that little information was lost by this new modelling. Model_reduced3 has the highest ($R^2_{adj} = 0.899$), lowest ($AIC = 346.3196$), and lowest ($BIC = 373.7893$).
+
+Model summary looks okay, we verified the condition 1: linearity, and condition 2: constant variance. Now we can continue on to looking at assumptions
+
+### Assumptions
+```{r}
+model_full <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category, data=data2)
+model_3 <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Stress.Level + Heart.Rate, data=data2)
+```
+To see how we can build residual plots and check assumptions, let's assess the status of the assumptions in our full model, as well as the third reduced model. This would allow us to verify that our conclusions based on the partial F test were valid.
+
+We shall begin with the reduced model. We can create all the residual plots we should check in the following way:
+```{r, fig.height=6, fig.width=6, fig.cap="Residual plots for assessing assumptions of reduced model"}
+# residuals and fitted values are stored in the model attributes(model_reduced3)
+r3 <- model_3$residuals
+fit3 <- model_3$fitted.values
+
+par(mfrow=c(3,2))
+# create the residual versus fitted value plot
+plot(r3 ~ fit3, main="Residuals vs Fitted Values", xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r3 ~ data2[,3], main="Residuals vs Predictor (Sleep Duration)", xlab="Sleep Duration", ylab="Residuals")
+plot(r3 ~ data2[,4], main="Residuals vs Predictor (Physical Activity level)", xlab="Physical Activity Level", ylab="Residuals")
+plot(r3 ~ data2[,5], main="Residuals vs Predictor (Stress Level)", xlab="Stress Level", ylab="Residuals")
+plot(r3 ~ data2[,8], main="Residuals vs Predictor (Heart Rate)", xlab="Heart Rate", ylab="Residuals")
+plot(r3 ~ data2[,9], main="Residuals vs Predictor (BMI.Category)", xlab="BMI Category", ylab="Residuals")
+
+# create the qq plot
+qqnorm(r3)
+qqline(r3)
+```
+No clumping noted in the interaction term plots, thus indicating that the assumption of uncorrelated errors have not been violated. Although not strong but there seems to be a small pattern in the residuals, which could indicate some non-constant variance. 
+
+```{r, fig.height=6, fig.width=6, fig.cap="Residual plots for assessing assumptions of full model"}
+# start by extracting the design matrix from the model so we have all the X's
+X <- model.matrix(model_full)
+head(X)
+colnames(X)
+
+# we will want a plot for all columns except the intercept, so columns 2-8
+# the residuals we need will come from the full model now
+rfull <- model_full$residuals
+
+# create our plot grid and our first plot
+par(mfrow=c(3,2))
+plot(rfull ~ model_full$fitted.values, xlab="Fitted Values", ylab="Residuals")
+
+# create each residual versus predictor plot
+plot(r3 ~ data2[,3], main="Residuals vs Predictor (Sleep Duration)", xlab="Sleep Duration", ylab="Residuals")
+plot(r3 ~ data2[,4], main="Residuals vs Predictor (Physical Activity level)", xlab="Physical Activity Level", ylab="Residuals")
+plot(r3 ~ data2[,9], main="Residuals vs Predictor (BMI.Category)", xlab="BMI Category", ylab="Residuals")
+
+# then add the normal QQ plot
+qqnorm(rfull)
+qqline(rfull)
+```
+So we see that the assumptions appear to be reasonable & similar to model_3. 
+
+### Correcting variance via weighted least squares for model_3
+```{r}
+spread = lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Stress.Level + Heart.Rate, data=data2)
+plot(data2$Quality.of.Sleep, abs(spread$residuals), xlab = "Sleep Quality", ylab = "abs(residuals)")
+```
+```{r}
+# make temporary data frame
+fitsigma = data.frame(x=data2$Quality.of.Sleep, y=abs(spread$residuals))
+```
+
+```{r}
+# fix the values and create the weights
+auxmodel = lm(y~x, fitsigma)
+w = 1/auxmodel$fitted.values^2
+```
+
+```{r}
+# fit through weighted least squares
+methodweights=lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Stress.Level + Heart.Rate, data2, weights = w)
+
+summary(methodweights)
+summary(methodweights)$adj.r.squared
+AIC(methodweights)
+BIC(methodweights)
+```
+This is the best model yet with the highest ($R^2_{adj}$ = 0.9167), lowest ($AIC = 259.790$), and lowest ($BIC = 287.2604$).
+
+Check diagnostic plots for assumptions:
+```{r}
+# plot using standarized residuals, "rstandard"
+
+# residuals vs fitted values
+plot(methodweights$fitted.values, rstandard(methodweights),
+     xlab = "fitted values", ylab = "standarized residuals")
+
+# residuals vs predictor values
+plot(data2$Sleep.Duration, rstandard(methodweights), main="Residuals vs Predictor (Sleep Duration)", xlab="Sleep Duration", ylab="Residuals")
+plot(data2$Physical.Activity.Level, rstandard(methodweights), main="Residuals vs Predictor (Physical Activity level)", xlab="Physical Activity Level", ylab="Residuals")
+plot(data2$Stress.Level, rstandard(methodweights), main="Residuals vs Predictor (Stress Level)", xlab="Stress Level", ylab="Residuals")
+plot(data2$Heart.Rate, rstandard(methodweights), main="Residuals vs Predictor (Heart Rate)", xlab="Heart Rate", ylab="Residuals")
+plot(data2$BMI.Category, rstandard(methodweights), main="Residuals vs Predictor (BMI.Category)", xlab="BMI Category", ylab="Residuals")
+
+# QQ-plot
+qqnorm(rstandard(methodweights))
+qqline(rstandard(methodweights))
+```
+
+### Transformation of model_3
+```{r}
+data2$sqrtQuality.of.Sleep = sqrt(data2$Quality.of.Sleep)
+data2$sqrtSleep.Duration = sqrt(data2$Sleep.Duration)
+data2$sqrtPhysical.Activity.Level = sqrt(data2$Physical.Activity.Level)
+data2$sqrtBMI.Category = sqrt(data2$BMI.Category)
+data2$sqrtStress.Level = sqrt(data2$Stress.Level)
+data2$sqrtHeart.Rate = sqrt(data2$Heart.Rate)
+
+plot(sqrtQuality.of.Sleep ~ sqrtSleep.Duration + sqrtPhysical.Activity.Level + sqrtBMI.Category + sqrtStress.Level + sqrtHeart.Rate, data2)
+```
+
+```{r}
+# fit this model
+methodtrans = lm(sqrtQuality.of.Sleep ~ sqrtSleep.Duration + sqrtPhysical.Activity.Level + sqrtBMI.Category + sqrtStress.Level + sqrtHeart.Rate, data2)
+
+summary(methodtrans)
+summary(methodtrans)$adj.r.squared
+AIC(methodtrans)
+BIC(methodtrans)
+```
+Model seems okay.
+
+Check Diagnostics plots for assumptions:
+```{r}
+# residuals vs fitted values
+plot(methodtrans$fitted.values, methodtrans$residuals,
+     xlab = "fitted values", ylab = "standarized residuals")
+
+# residuals vs predictor values
+plot(data2$Sleep.Duration, methodtrans$residuals, main="Residuals vs Predictor (Sleep Duration)", xlab="Sleep Duration", ylab="Residuals")
+plot(data2$Physical.Activity.Level, methodtrans$residuals, main="Residuals vs Predictor (Physical Activity level)", xlab="Physical Activity Level", ylab="Residuals")
+plot(data2$Stress.Level, methodtrans$residuals, main="Residuals vs Predictor (Stress Level)", xlab="Stress Level", ylab="Residuals")
+plot(data2$Heart.Rate, methodtrans$residuals, main="Residuals vs Predictor (Heart Rate)", xlab="Heart Rate", ylab="Residuals")
+plot(data2$BMI.Category, methodtrans$residuals, main="Residuals vs Predictor (BMI.Category)", xlab="BMI Category", ylab="Residuals")
+
+# QQ-plot
+qqnorm(methodtrans$residuals)
+qqline(methodtrans$residuals)
+```
+After transformation, we can see that it results in a similar overall assumptions than no transformations at all on model_3.
+
+### Plotting all the models
+```{r}
+# original model: lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category)
+plot(model_full)
+```
+
+```{r}
+# model 1: lm(Quality.of.Sleep ~ Sleep.Duration)
+plot(model_1)
+```
+
+```{r}
+# model 2: lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Systolic + Diastolic)
+plot(model_2)
+```
+
+```{r}
+# model 3: lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Stress.Level + Heart.Rate) 
+plot(model_3)
+```
+
+```{r}
+# Weighed Least Squares model_3
+plot(methodweights)
+```
+
+```{r}
+# Transformation model_3
+plot(methodtrans)
+```
+
+### Validate the model
+
+Splitting the data into testing and training data sets, with 60% of observations used for training. Fitting linear regression models for Quality of Sleep using the training data set.
+```{r}
+# split the data into testing and training data sets, with 60% of observations used for training
+set.seed(720)
+n <- nrow(data2)
+training_indices <- sample(1:n, size=round(0.6*n))
+train <- data2[training_indices,]
+y_train <- train$Quality.of.Sleep
+
+# testing data set include all observation not in the training data
+test <- data2[-training_indices,]
+y_test <- test$Quality.of.Sleep
+
+# fit models to training data
+modfull_train <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category, data=train)
+mod1_train <- lm(Quality.of.Sleep ~ Sleep.Duration, data=train)
+mod2_train <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Systolic + Diastolic, data=train)
+mod3_train <- lm(Quality.of.Sleep ~ Sleep.Duration + Physical.Activity.Level + BMI.Category + Stress.Level + Heart.Rate, data=train)
+
+# make predictions for testing data using training model
+yhat_modfull_test <- predict(modfull_train, newdata = test)
+yhat_mod1_test <- predict(mod1_train, newdata = test)
+yhat_mod2_test <- predict(mod2_train, newdata = test)
+yhat_mod3_test <- predict(mod3_train, newdata = test)
+
+# make predictions for training data using training model
+yhat_modfull_train <- predict(modfull_train, newdata = train)
+yhat_mod1_train <- predict(mod1_train, newdata = train)
+yhat_mod2_train <- predict(mod2_train, newdata = train)
+yhat_mod3_train <- predict(mod3_train, newdata = train)
+
+# calculate RMSE for testing data
+modfull_test_RMSE <- sqrt(sum((y_test - yhat_modfull_test)^2) / nrow(test))
+mod1_test_RMSE <- sqrt(sum((y_test - yhat_mod1_test)^2) / nrow(test))
+mod2_test_RMSE <- sqrt(sum((y_test - yhat_mod2_test)^2) / nrow(test))
+mod3_test_RMSE <- sqrt(sum((y_test - yhat_mod3_test)^2) / nrow(test))
+
+# calculate RMSE for training data
+modfull_train_RMSE <- sqrt(sum((y_train - yhat_modfull_train)^2) / nrow(train))
+mod1_train_RMSE <- sqrt(sum((y_train - yhat_mod1_train)^2) / nrow(train))
+mod2_train_RMSE <- sqrt(sum((y_train - yhat_mod2_train)^2) / nrow(train))
+mod3_train_RMSE <- sqrt(sum((y_train - yhat_mod3_train)^2) / nrow(train))
+```
+
+Calculate RMSE for each of the 4 models for both training and testing data set
+```{r}
+data_frame(Model = c("model_full", "model_1", "model_2", "model_3"),
+   RMSE_train = c(modfull_train_RMSE, mod1_train_RMSE, mod2_train_RMSE, mod3_train_RMSE),
+   RMSE_test = c(modfull_test_RMSE, mod1_test_RMSE, mod2_test_RMSE, mod3_test_RMSE))
+```
+Model_3, methodweights performed the best!
+
+```{r}
+summary(mod3_train)
+summary(mod3_train)$adj.r.squared
+AIC(mod3_train)
+BIC(mod3_train)
+```
+
+```{r}
+plot(mod3_train)
+```
+
+```
+
